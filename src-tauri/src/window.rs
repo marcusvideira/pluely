@@ -199,6 +199,63 @@ fn setup_dashboard_close_handler<R: Runtime>(window: &WebviewWindow<R>) {
     });
 }
 
+/// Creates the detached, movable Insights window.
+pub fn create_insights_window<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<WebviewWindow<R>, tauri::Error> {
+    let builder =
+        WebviewWindowBuilder::new(app, "insights", tauri::WebviewUrl::App("/insights".into()))
+            .title("Pluely - Insights")
+            .decorations(false)
+            .resizable(true)
+            .center()
+            .inner_size(300.0, 620.0)
+            .min_inner_size(220.0, 240.0)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .content_protected(true)
+            .visible(false);
+
+    let window = builder.build()?;
+
+    // Hide on close instead of destroying, so it can be reopened.
+    let window_clone = window.clone();
+    window.on_window_event(move |event| {
+        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            if let Err(e) = window_clone.hide() {
+                eprintln!("Failed to hide insights window on close: {}", e);
+            }
+        }
+    });
+
+    Ok(window)
+}
+
+/// Toggles the Insights window (creates it on first use).
+#[tauri::command]
+pub fn toggle_insights_window(app: tauri::AppHandle) -> Result<(), String> {
+    // The window is pre-created (hidden) at startup, so we only show/hide it.
+    let window = match app.get_webview_window("insights") {
+        Some(w) => w,
+        None => create_insights_window(&app)
+            .map_err(|e| format!("Failed to create insights window: {}", e))?,
+    };
+
+    if window.is_visible().unwrap_or(false) {
+        window
+            .hide()
+            .map_err(|e| format!("Failed to hide insights window: {}", e))?;
+    } else {
+        window
+            .show()
+            .map_err(|e| format!("Failed to show insights window: {}", e))?;
+        let _ = window.set_focus();
+    }
+
+    Ok(())
+}
+
 /// Shows the dashboard window and brings it to focus
 pub fn show_dashboard_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     if let Some(dashboard_window) = app.get_webview_window("dashboard") {

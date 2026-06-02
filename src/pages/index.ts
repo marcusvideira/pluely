@@ -9,3 +9,6 @@ export { default as Shortcuts } from "./shortcuts";
 export { default as Audio } from "./audio";
 export { default as Screenshot } from "./screenshot";
 export { default as Responses } from "./responses";
+export { default as MeetingTranscription } from "./meeting-transcription";
+export { default as ViewMeeting } from "./meeting-transcription/components/MeetingView";
+export { default as InsightsWindow } from "./insights-window";

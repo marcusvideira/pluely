@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "cross-platform",
   "description": "Capability for the main window on Windows and Linux",
-  "windows": ["main", "dashboard"],
+  "windows": ["main", "dashboard", "insights"],
   "platforms": ["windows", "linux"],
   "permissions": [
     "core:default",
@@ -19,8 +19,6 @@
     "core:window:allow-start-dragging",
     "sql:default",
     "sql:allow-execute",
-    "posthog:default",
-    "posthog:allow-capture",
     "autostart:allow-enable",
     "autostart:allow-disable",
     "autostart:allow-is-enabled",

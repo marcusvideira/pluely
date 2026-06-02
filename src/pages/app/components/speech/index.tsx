@@ -27,7 +27,9 @@ import { useSystemAudioType } from "@/hooks";
 import { useApp } from "@/contexts";
 import { cn } from "@/lib/utils";
 
-export const SystemAudio = (props: useSystemAudioType) => {
+export const SystemAudio = (
+  props: useSystemAudioType & { meetingActive?: boolean }
+) => {
   const {
     capturing,
     isProcessing,
@@ -63,9 +65,10 @@ export const SystemAudio = (props: useSystemAudioType) => {
     startContinuousRecording,
     ignoreContinuousRecording,
     scrollAreaRef,
+    meetingActive = false,
   } = props;
 
-  const { hasActiveLicense, supportsImages } = useApp();
+  const { supportsImages } = useApp();
 
   // View mode toggle
   const [conversationMode, setConversationMode] = useState(false);
@@ -185,8 +188,13 @@ export const SystemAudio = (props: useSystemAudioType) => {
       <PopoverTrigger asChild>
         <Button
           size="icon"
-          title={getButtonTitle()}
+          title={
+            meetingActive
+              ? "Stop the meeting transcript to use system-audio insights"
+              : getButtonTitle()
+          }
           onClick={handleToggleCapture}
+          disabled={meetingActive}
           className={cn(
             capturing && "bg-green-50 hover:bg-green-100",
             error && "bg-red-100 hover:bg-red-200"
@@ -226,7 +234,7 @@ export const SystemAudio = (props: useSystemAudioType) => {
                 {/* Action Buttons */}
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   {/* Screenshot Button */}
-                  {hasActiveLicense && !setupRequired && supportsImages && (
+                  {!setupRequired && supportsImages && (
                     <Button
                       size="sm"
                       variant={screenshotImage ? "default" : "outline"}

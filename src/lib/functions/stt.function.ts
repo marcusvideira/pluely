@@ -4,37 +4,10 @@ import {
   blobToBase64,
 } from "./common.function";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
-import { invoke } from "@tauri-apps/api/core";
 
 import { TYPE_PROVIDER } from "@/types";
 import curl2Json from "@bany/curl-to-json";
-import { shouldUsePluelyAPI } from "./pluely.api";
-
-// Pluely STT function
-async function fetchPluelySTT(audio: File | Blob): Promise<string> {
-  try {
-    // Convert audio to base64
-    const audioBase64 = await blobToBase64(audio);
-
-    // Call Tauri command
-    const response = await invoke<{
-      success: boolean;
-      transcription?: string;
-      error?: string;
-    }>("transcribe_audio", {
-      audioBase64,
-    });
-
-    if (response.success && response.transcription) {
-      return response.transcription;
-    } else {
-      return response.error || "Transcription failed";
-    }
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    return `Pluely STT Error: ${errorMessage}`;
-  }
-}
+import { getPrimarySttLanguage } from "@/lib/storage/stt-language.storage";
 
 export interface STTParams {
   provider: TYPE_PROVIDER | undefined;
@@ -53,12 +26,6 @@ export async function fetchSTT(params: STTParams): Promise<string> {
 
   try {
     const { provider, selectedProvider, audio } = params;
-
-    // Check if we should use Pluely API instead
-    const usePluelyAPI = await shouldUsePluelyAPI();
-    if (usePluelyAPI) {
-      return await fetchPluelySTT(audio);
-    }
 
     if (!provider) throw new Error("Provider not provided");
     if (!selectedProvider) throw new Error("Selected provider not provided");
@@ -171,6 +138,16 @@ export async function fetchSTT(params: STTParams): Promise<string> {
           form.append(key.toLowerCase(), val as string | Blob);
         }
       }
+
+      // Force the configured input language for Whisper-style providers
+      // (OpenAI/Groq) so short clips aren't mis-detected as the wrong language.
+      // Overrides any template default (e.g. Groq's hardcoded `language=en`).
+      const sttLanguage = getPrimarySttLanguage();
+      if (sttLanguage) {
+        form.delete("language");
+        form.append("language", sttLanguage);
+      }
+
       delete finalHeaders["Content-Type"];
       body = form;
     } else if (isBinaryUpload) {
@@ -228,7 +205,9 @@ export async function fetchSTT(params: STTParams): Promise<string> {
     const transcription = (getByPath(data, path) || "").trim();
 
     if (!transcription) {
-      return [...warnings, "No transcription found"].join("; ");
+      // No speech detected (silence/noise): return empty so callers can
+      // silently skip it instead of surfacing a fake "transcription".
+      return warnings.filter(Boolean).join("; ");
     }
 
     // Return transcription with any warnings

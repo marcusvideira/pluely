@@ -46,3 +46,121 @@ export const floatArrayToWav = (
 
   return new Blob([buffer], { type: `audio/${format}` });
 };
+
+/**
+ * Duration (ms) of a PCM WAV blob, read from its header (sample rate, channels,
+ * bits) and data size. Used to estimate when a clip's speech started.
+ */
+export const wavDurationMs = async (blob: Blob): Promise<number> => {
+  try {
+    const buf = await blob.arrayBuffer();
+    if (buf.byteLength < 44) return 0;
+    const view = new DataView(buf);
+    const channels = view.getUint16(22, true) || 1;
+    const sampleRate = view.getUint32(24, true) || 16000;
+    const bitsPerSample = view.getUint16(34, true) || 16;
+    const bytesPerSample = Math.max(1, bitsPerSample / 8);
+    const dataBytes = buf.byteLength - 44;
+    const frames = dataBytes / (bytesPerSample * channels);
+    return (frames / sampleRate) * 1000;
+  } catch {
+    return 0;
+  }
+};
+
+// Shared AudioContext for decoding (lazily created)
+let _decodeAudioCtx: AudioContext | null = null;
+const getDecodeAudioCtx = (): AudioContext | null => {
+  if (typeof window === "undefined") return null;
+  const Ctx =
+    window.AudioContext ||
+    (window as unknown as { webkitAudioContext?: typeof AudioContext })
+      .webkitAudioContext;
+  if (!Ctx) return null;
+  if (!_decodeAudioCtx) _decodeAudioCtx = new Ctx();
+  return _decodeAudioCtx;
+};
+
+/**
+ * Decode an ArrayBuffer containing audio or video data and resample to a
+ * target sample rate, returning a mono Float32Array.
+ * Uses OfflineAudioContext for high-quality resampling when needed.
+ */
+export const decodeAndResampleAudio = async (
+  arrayBuffer: ArrayBuffer,
+  targetSampleRate: number = 16000
+): Promise<{ data: Float32Array; sampleRate: number }> => {
+  const ctx = new AudioContext();
+  const buffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+  await ctx.close();
+
+  if (buffer.sampleRate === targetSampleRate) {
+    return { data: buffer.getChannelData(0), sampleRate: targetSampleRate };
+  }
+
+  const outputLength = Math.ceil(buffer.duration * targetSampleRate);
+  const offlineCtx = new OfflineAudioContext(1, outputLength, targetSampleRate);
+  const source = offlineCtx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(offlineCtx.destination);
+  source.start(0);
+  const resampled = await offlineCtx.startRendering();
+  return { data: resampled.getChannelData(0), sampleRate: targetSampleRate };
+};
+
+/**
+ * Split a Float32Array of mono audio data into WAV Blob chunks.
+ * Each chunk is `chunkSamples` samples long (except possibly the last).
+ */
+export const chunkFloat32ToWavBlobs = (
+  audioData: Float32Array,
+  sampleRate: number,
+  chunkSamples: number
+): Blob[] => {
+  const chunks: Blob[] = [];
+  for (let offset = 0; offset < audioData.length; offset += chunkSamples) {
+    const end = Math.min(offset + chunkSamples, audioData.length);
+    chunks.push(floatArrayToWav(audioData.slice(offset, end), sampleRate));
+  }
+  return chunks;
+};
+
+/**
+ * Time-compress a mono WAV blob so it plays `factor`x faster (e.g. 1.5x).
+ * Shorter audio = faster + cheaper speech-to-text. Pitch rises with speed
+ * (no pitch correction), which Whisper-class models tolerate well.
+ * Falls back to the original blob on any failure.
+ */
+export const speedUpWav = async (
+  blob: Blob,
+  factor: number = 1.5
+): Promise<Blob> => {
+  if (factor <= 1) return blob;
+  try {
+    const ctx = getDecodeAudioCtx();
+    if (!ctx) return blob;
+
+    const arrayBuf = await blob.arrayBuffer();
+    const audioBuf = await ctx.decodeAudioData(arrayBuf.slice(0));
+    const input = audioBuf.getChannelData(0);
+    const sr = audioBuf.sampleRate;
+
+    const outLen = Math.floor(input.length / factor);
+    if (outLen < 1) return blob;
+
+    const output = new Float32Array(outLen);
+    for (let i = 0; i < outLen; i++) {
+      const pos = i * factor;
+      const idx = Math.floor(pos);
+      const frac = pos - idx;
+      const a = input[idx] ?? 0;
+      const b = input[idx + 1] ?? a;
+      output[i] = a + (b - a) * frac; // linear interpolation
+    }
+
+    return floatArrayToWav(output, sr, "wav");
+  } catch (e) {
+    console.warn("speedUpWav failed; sending original audio:", e);
+    return blob;
+  }
+};

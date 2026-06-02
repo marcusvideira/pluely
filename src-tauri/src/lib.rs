@@ -1,13 +1,10 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-mod activate;
-mod api;
 mod capture;
 mod db;
 mod shortcuts;
 mod window;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, WebviewWindow};
-use tauri_plugin_posthog::{init as posthog_init, PostHogConfig, PostHogOptions};
 use tokio::task::JoinHandle;
 mod speaker;
 use capture::CaptureState;
@@ -31,8 +28,6 @@ fn get_app_version() -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Get PostHog API key
-    let posthog_api_key = option_env!("POSTHOG_API_KEY").unwrap_or("").to_string();
     let mut builder = tauri::Builder::default()
         .plugin(
             tauri_plugin_sql::Builder::default()
@@ -45,27 +40,12 @@ pub fn run() {
             is_hidden: Mutex::new(false),
         })
         .manage(shortcuts::RegisteredShortcuts::default())
-        .manage(shortcuts::LicenseState::default())
         .manage(shortcuts::MoveWindowState::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_keychain::init())
-        .plugin(tauri_plugin_shell::init()) // Add shell plugin
-        .plugin(posthog_init(PostHogConfig {
-            api_key: posthog_api_key,
-            options: Some(PostHogOptions {
-                // disable session recording
-                disable_session_recording: Some(true),
-                // disable pageview
-                capture_pageview: Some(false),
-                // disable pageleave
-                capture_pageleave: Some(false),
-                ..Default::default()
-            }),
-            ..Default::default()
-        }))
-        .plugin(tauri_plugin_machine_uid::init());
+        .plugin(tauri_plugin_shell::init()); // Add shell plugin
     #[cfg(target_os = "macos")]
     {
         builder = builder.plugin(tauri_nspanel::init());
@@ -76,6 +56,7 @@ pub fn run() {
             window::set_window_height,
             window::open_dashboard,
             window::toggle_dashboard,
+            window::toggle_insights_window,
             window::move_window,
             capture::capture_to_base64,
             capture::start_screen_capture,
@@ -85,25 +66,9 @@ pub fn run() {
             shortcuts::get_registered_shortcuts,
             shortcuts::update_shortcuts,
             shortcuts::validate_shortcut_key,
-            shortcuts::set_license_status,
             shortcuts::set_app_icon_visibility,
             shortcuts::set_always_on_top,
             shortcuts::exit_app,
-            activate::activate_license_api,
-            activate::deactivate_license_api,
-            activate::validate_license_api,
-            activate::mask_license_key_cmd,
-            activate::get_checkout_url,
-            activate::secure_storage_save,
-            activate::secure_storage_get,
-            activate::secure_storage_remove,
-            api::transcribe_audio,
-            api::chat_stream_response,
-            api::fetch_models,
-            api::fetch_prompts,
-            api::create_system_prompt,
-            api::check_license_status,
-            api::get_activity,
             speaker::start_system_audio_capture,
             speaker::stop_system_audio_capture,
             speaker::manual_stop_continuous,
@@ -125,6 +90,14 @@ pub fn run() {
             if app_handle.get_webview_window("dashboard").is_none() {
                 if let Err(e) = window::create_dashboard_window(&app_handle) {
                     eprintln!("Failed to pre-create dashboard window on startup: {}", e);
+                }
+            }
+
+            // Pre-create the Insights window (hidden) so toggling only shows/
+            // hides it — creating a window from a command can deadlock.
+            if app_handle.get_webview_window("insights").is_none() {
+                if let Err(e) = window::create_insights_window(&app_handle) {
+                    eprintln!("Failed to pre-create insights window on startup: {}", e);
                 }
             }
 

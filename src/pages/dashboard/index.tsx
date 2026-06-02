@@ -1,66 +1,31 @@
-import { useCallback, useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { GetLicense } from "@/components";
-import { PluelyApiSetup, Usage } from "./components";
 import { PageLayout } from "@/layouts";
-import { useApp } from "@/contexts";
+import { useMenuItems } from "@/hooks";
+import { useNavigate } from "react-router-dom";
+import { Card } from "@/components";
 
 const Dashboard = () => {
-  const { hasActiveLicense } = useApp();
-  const [activity, setActivity] = useState<any>(null);
-  const [loadingActivity, setLoadingActivity] = useState(false);
+  const { menu } = useMenuItems();
+  const navigate = useNavigate();
 
-  const fetchActivity = useCallback(async () => {
-    if (!hasActiveLicense) {
-      setActivity({ data: [], total_tokens_used: 0 });
-      return;
-    }
-    setLoadingActivity(true);
-    try {
-      const response = await invoke("get_activity");
-      const responseData: any = response;
-      if (responseData && responseData.success) {
-        setActivity(responseData);
-      } else {
-        setActivity({ data: [], total_tokens_used: 0 });
-      }
-    } catch (error) {
-      setActivity({ data: [], total_tokens_used: 0 });
-    } finally {
-      setLoadingActivity(false);
-    }
-  }, [hasActiveLicense]);
-
-  useEffect(() => {
-    if (hasActiveLicense) {
-      fetchActivity();
-    } else {
-      setActivity(null);
-    }
-  }, [fetchActivity, hasActiveLicense]);
-
-  const activityData =
-    activity && Array.isArray(activity.data) ? activity.data : [];
-  const totalTokens =
-    activity && typeof activity.total_tokens_used === "number"
-      ? activity.total_tokens_used
-      : 0;
+  const shortcuts = menu.filter((item) => item.href !== "/dashboard");
 
   return (
     <PageLayout
-      title="Dashboard"
-      description="Pluely license to unlock faster responses, quicker support and premium features."
-      rightSlot={!hasActiveLicense ? <GetLicense /> : null}
+      title="Welcome to Pluely"
+      description="A fully open-source, privacy-first AI assistant. Bring your own API keys — every feature is free."
     >
-      {/* Pluely API Setup */}
-      <PluelyApiSetup />
-
-      <Usage
-        loading={loadingActivity}
-        onRefresh={fetchActivity}
-        data={activityData}
-        totalTokens={totalTokens}
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {shortcuts.map((item) => (
+          <Card
+            key={item.href}
+            className="p-4 border cursor-pointer hover:border-primary/50 transition-all flex items-center gap-3"
+            onClick={() => navigate(item.href)}
+          >
+            <item.icon className="size-5 text-primary flex-shrink-0" />
+            <span className="text-sm font-medium">{item.label}</span>
+          </Card>
+        ))}
+      </div>
     </PageLayout>
   );
 };

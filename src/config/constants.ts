@@ -13,13 +13,16 @@ export const STORAGE_KEYS = {
   SYSTEM_AUDIO_CONTEXT: "system_audio_context",
   SYSTEM_AUDIO_QUICK_ACTIONS: "system_audio_quick_actions",
   CUSTOMIZABLE: "customizable",
-  PLUELY_API_ENABLED: "pluely_api_enabled",
   SHORTCUTS: "shortcuts",
   AUTOSTART_INITIALIZED: "autostart_initialized",
 
   SELECTED_AUDIO_DEVICES: "selected_audio_devices",
   RESPONSE_SETTINGS: "response_settings",
   SUPPORTS_IMAGES: "supports_images",
+  STT_INPUT_LANGUAGES: "stt_input_languages",
+  MEETING_TRANSCRIPTION_SPEED: "meeting_transcription_speed",
+  MEETING_TRANSCRIPTION_PAUSE_MS: "meeting_transcription_pause_ms",
+  MEETING_SEGMENT_BREAK_MS: "meeting_segment_break_ms",
 } as const;
 
 // Max number of files that can be attached to a message
