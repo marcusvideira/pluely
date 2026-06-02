@@ -20,7 +20,7 @@ const newSegmentId = () =>
     ? crypto.randomUUID()
     : `seg_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
-export function useImportMeeting() {
+export function useImportMeeting(onComplete?: (meetingId: string) => void) {
   const { selectedSttProvider, allSttProviders } = useApp();
   const navigate = useNavigate();
 
@@ -116,7 +116,11 @@ export function useImportMeeting() {
           }
         }
 
-        navigate(`/meetings/view/${meetingId}`);
+        if (onComplete) {
+          onComplete(meetingId);
+        } else {
+          navigate(`/meetings/view/${meetingId}`);
+        }
       } catch (e) {
         if (meetingId) {
           await deleteMeeting(meetingId).catch(() => {});
