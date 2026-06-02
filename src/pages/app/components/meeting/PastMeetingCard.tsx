@@ -1,4 +1,4 @@
-import { Button, Markdown, ScrollArea } from "@/components";
+import { Button, Markdown } from "@/components";
 import { useApp } from "@/contexts";
 import {
   fetchAIResponse,
@@ -183,10 +183,8 @@ export const PastMeetingCard = ({
       )}
 
       {shownSummary && (
-        <div className="shrink-0 mx-3 mt-2 rounded-md border border-border/60 bg-muted/30 p-2 text-xs max-h-40">
-          <ScrollArea className="max-h-36">
-            <Markdown>{shownSummary}</Markdown>
-          </ScrollArea>
+        <div className="shrink-0 mx-3 mt-2 rounded-md border border-border/60 bg-muted/30 p-2 text-xs max-h-40 overflow-y-auto">
+          <Markdown>{shownSummary}</Markdown>
         </div>
       )}
 
